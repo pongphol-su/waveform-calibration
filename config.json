@@ -1,0 +1,9 @@
+{
+    "maxShift"       :0.1,
+    "shiftResolution":0.00005,
+    "saveCorrectedSignal" :true,
+    "showPlots"       :false,
+    "defaultFigSize"  :[8, 6],
+    "bandRange1"      :[686.7, 691.5],
+    "bandRange2"      :[759.35, 768.6]
+}
