@@ -17,7 +17,7 @@ with open(configPath, 'r') as file:
 defaultFigSize = config['defaultFigSize']
 plt.rcParams['lines.linewidth'] = 1
 
-def load_wl_amp(filePath, wlCol=0, ampCol=1):
+def load_table(filePath, ampCol: list = None):
     LOADERS = {
         ".csv": pd.read_csv,
         ".xlsx": pd.read_excel,
@@ -25,7 +25,7 @@ def load_wl_amp(filePath, wlCol=0, ampCol=1):
         ".p": pd.read_pickle
     }
 
-    ext = Path(filePath).suffix
+    ext = Path(filePath).suffix.lower()
 
     if ext not in LOADERS:
         raise ValueError(
@@ -33,18 +33,32 @@ def load_wl_amp(filePath, wlCol=0, ampCol=1):
             f"Supported formats: {', '.join(LOADERS.keys())}"
         )
 
-    data =  LOADERS[ext](filePath)
-    data = data.sort_values(by=[data.columns[wlCol]])
-    wl  = data.iloc[:,wlCol]
-    amp = data.iloc[:,ampCol]
+    # Load data
+    data = LOADERS[ext](filePath)
 
+    # Sort by wavelength column (index 0)
+    data = data.sort_values(by=data.columns[0])
+
+    # Determine which amplitude columns to load
+    if ampCol is None:
+        amp_indices = list(range(1, data.shape[1]))  # all except wl column
+    else:
+        amp_indices = ampCol
+
+    # Build output DataFrame (wl + selected amp columns)
+    selected_cols = [0] + amp_indices
+    data_selected = data.iloc[:, selected_cols]
+
+    # Extract channel names (exclude wl column)
     try:
-        channelName = f'{data.columns[ampCol]}'
-    except:
-        channelName = None
+        channelNames = [str(data.columns[i]) for i in amp_indices]
+    except Exception:
+        channelNames = None
 
-    name = [Path(filePath).stem, channelName]
-    return wl, amp, name
+    # Build name structure
+    name = [Path(filePath).stem, channelNames]
+
+    return data_selected, name
 
 def selectFile(*fileTypes, initPath=None, titleText="Select a file"):
     root = tk.Tk()
@@ -108,18 +122,6 @@ def calFitScore(dataIntensity, refIntensity, option='SSD'):
     else:
         raise ValueError
     return score
-
-def select_file(dialogTitle="Select file"):
-    """Open a file selection dialog and return the chosen file path."""
-    root = tk.Tk()
-    root.withdraw()  # Hide main window
-    file_path = filedialog.askopenfilename(
-        title=dialogTitle,
-        filetypes=[("Data files", "*.csv *.xlsx")]
-    )
-    if not file_path:
-        raise FileNotFoundError("No file selected.")
-    return file_path
 
 def select_data(domain, intensity, selectionRange, maxShift=0, option="extend"): # include one point left of the range, and another point to the right
     # option: "extend", "strict"
@@ -403,10 +405,8 @@ def main(showPlot=False, outputDir=None):
     print("")
     print(f'observed data file: {dataFileName}')
     print(f'reference file    : {refFileName}')
-    spectrumTable = pd.DataFrame()
-    spectrumTable['wl'], spectrumTable['S1'], spectrumName = load_wl_amp(dataFileName, ampCol=1)
-    refFile = pd.DataFrame()
-    refFile['wl'], refFile['amp'], _ = load_wl_amp(refFileName)
+    spectrumTable, spectrumName = load_table(dataFileName)
+    refFile, _ = load_table(refFileName)
 
     spectrumTable = spectrumTable.dropna(axis=1, how='all')
     spectrumTable = spectrumTable.drop_duplicates()
@@ -475,7 +475,7 @@ def main(showPlot=False, outputDir=None):
         plt.plot(refWavelength, refIntensity, label='reference spectrum')
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Intensity')
-        plt.title(f'Calibrated {spectrumName} Waveform')
+        plt.title(f'Calibrated {spectrumName[0]} Waveform')
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
